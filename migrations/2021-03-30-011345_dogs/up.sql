@@ -1,0 +1,3 @@
+CREATE TABLE dogs (
+    path TEXT NOT NULL PRIMARY KEY
+);
