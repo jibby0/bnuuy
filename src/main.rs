@@ -100,3 +100,5 @@ pub mod db {
         }
     }
 }
+
+// "instagram-scraper --destination ./cache/instagram --retain-username --media-metadata --media-types image --latest --login-user {} --login-pass {} --maximum 100 {page}"
