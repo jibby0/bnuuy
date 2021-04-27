@@ -2,25 +2,27 @@
 
 #[macro_use]
 extern crate rocket;
-#[macro_use]
 extern crate rocket_contrib;
 #[macro_use]
 extern crate diesel;
 
 pub mod schema;
 
-use crate::db::DbConn;
+use crate::db::{dogs::Dog, DbConn};
 use base64;
+use clokwerk::{Scheduler, TimeUnits};
 use log;
 use rocket::{
     http::Status,
-    request::{FromRequest, Outcome, Request},
-    response::{content, status::Custom, Responder, Response},
-    State,
+    request::Request,
+    response::{content, Responder, Response},
 };
 use std::fs;
 use std::io::prelude::Read;
 use walkdir::WalkDir;
+
+use std::{error::Error, result::Result as StdResult};
+type Result<T> = StdResult<T, Box<dyn Error>>;
 
 const INSTA_USERNAME: &str = "MY-INSTA-USERNAME";
 const INSTA_PASSWORD: &str = "MY-INSTA-PASSWORD";
@@ -37,15 +39,12 @@ static INSTA_PAGES: &'static [&str] = &[
 ];
 const IMAGE_FOLDER: &str = "instagram-scraper";
 
-#[database("sqlite_logs")]
-struct SqliteConn(diesel::SqliteConnection);
-
 #[derive(Debug)]
 pub struct RespErr(Status);
-type Resp<T> = Result<T, RespErr>;
+type Resp<T> = StdResult<T, RespErr>;
 
 impl<'r> Responder<'r> for RespErr {
-    fn respond_to(self, req: &Request) -> Result<Response<'r>, Status> {
+    fn respond_to(self, req: &Request) -> StdResult<Response<'r>, Status> {
         self.0.respond_to(req)
     }
 }
@@ -87,8 +86,13 @@ fn image_as_b64(path: String) -> Resp<String> {
     Ok(base64::encode(buffer))
 }
 
-fn update_image_paths() {
+fn update_image_paths(pool: &mut db::Pool) -> Result<()> {
     log::debug!("Adding new images & wiping old images..");
+
+    // TODO
+    // "instagram-scraper --destination ./cache/instagram --retain-username --media-metadata --media-types image --latest --login-user {} --login-pass {} --maximum 100 {page}"
+
+    let conn = db::DbConn(pool.get()?);
 
     let mut images = Vec::new();
     for entry in WalkDir::new(IMAGE_FOLDER) {
@@ -114,15 +118,31 @@ fn update_image_paths() {
     // Retain the N most recent
     images.truncate(1000);
 
-    // TODO wipe DB, add these entries to the DB
-    // dogs::table
+    let dogs = images
+        .iter()
+        .map(|(path, _time)| Dog { path: path.clone() })
+        .collect();
 
-    // log::debug!("Done adding new paths");
+    db::dogs::delete_all(&conn)?;
+    db::dogs::insert_many(dogs, &conn)?;
+
+    log::debug!("Done adding new paths");
+    Ok(())
 }
 
 fn main() {
     dotenv::dotenv().expect("Failed to read .env file");
     logger::setup_logging(log::LevelFilter::Debug).expect("failed to initialize logging");
+
+    let mut pool = db::init_pool();
+    let f = move || {
+        if let Err(e) = update_image_paths(&mut pool) {
+            log::error!("{}", e);
+        }
+    };
+    let mut scheduler = Scheduler::new();
+    scheduler.every(3.hours()).run(f);
+
     rocket::ignite()
         .manage(db::init_pool())
         .mount("/", routes![dog])
@@ -144,7 +164,7 @@ pub mod db {
 
     pub fn init_pool() -> Pool {
         let manager = ConnectionManager::<SqliteConnection>::new(database_url());
-        Pool::new(manager).expect("db pool")
+        Pool::new(manager).expect("Could not initialize db pool")
     }
 
     fn database_url() -> String {
@@ -174,7 +194,6 @@ pub mod db {
     }
 
     pub mod dogs {
-        use crate::db::DbConn;
         use crate::schema::dogs;
         use diesel;
         use diesel::dsl::sql;
@@ -182,7 +201,7 @@ pub mod db {
         use diesel::prelude::*;
         use diesel::sql_types::BigInt;
 
-        #[derive(Queryable, QueryableByName, Identifiable)]
+        #[derive(Queryable, QueryableByName, Identifiable, Insertable)]
         #[table_name = "dogs"]
         #[primary_key("path")]
         pub struct Dog {
@@ -190,13 +209,23 @@ pub mod db {
         }
 
         pub fn get_random(conn: &SqliteConnection) -> QueryResult<Dog> {
-            //dogs::table.first::<Dog>(&*conn)
             dogs::table
                 .order::<SqlLiteral<BigInt>>(sql("RANDOM()"))
                 .first(&*conn)
+        }
 
-            //let dog_vec = diesel::sql_query("SELECT * FROM dogs ORDER BY RANDOM() LIMIT 1").get_result(conn)?;
-            //Ok(dog_vec[0])
+        pub fn delete_all(conn: &SqliteConnection) -> QueryResult<usize> {
+            diesel::delete(dogs::table).execute(&*conn)
+        }
+
+        pub fn insert(dog: Dog, connection: &SqliteConnection) -> QueryResult<usize> {
+            insert_many(vec![dog], connection)
+        }
+
+        pub fn insert_many(dogs: Vec<Dog>, connection: &SqliteConnection) -> QueryResult<usize> {
+            diesel::insert_into(dogs::table)
+                .values(dogs)
+                .execute(connection)
         }
     }
 }
@@ -225,5 +254,3 @@ pub mod logger {
         Ok(())
     }
 }
-
-// "instagram-scraper --destination ./cache/instagram --retain-username --media-metadata --media-types image --latest --login-user {} --login-pass {} --maximum 100 {page}"

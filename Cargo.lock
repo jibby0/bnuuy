@@ -116,6 +116,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
  "chrono",
+ "clokwerk",
  "diesel",
  "dotenv",
  "fern",
@@ -165,6 +166,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12f8e7987cbd042a63249497f41aed09f8e65add917ea6566effbc56578d6801"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "clokwerk"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9797a6d3acefa28d4cc62bf548b6ddc57b8ae51a43702d001cb46fba1dc48c1"
+dependencies = [
+ "chrono",
 ]
 
 [[package]]
