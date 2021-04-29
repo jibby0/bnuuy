@@ -5,20 +5,24 @@ extern crate rocket;
 extern crate rocket_contrib;
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate diesel_migrations;
 
 pub mod schema;
 
 use crate::db::{dogs::Dog, DbConn};
 use base64;
 use clokwerk::{Scheduler, TimeUnits};
+use diesel::{Connection, SqliteConnection};
 use log;
 use rocket::{
     http::Status,
     request::Request,
     response::{content, Responder, Response},
 };
-use std::fs;
+use std::{fs, thread};
 use std::io::prelude::Read;
+use std::process::Command;
 use walkdir::WalkDir;
 
 use std::{error::Error, result::Result as StdResult};
@@ -37,7 +41,7 @@ static INSTA_PAGES: &'static [&str] = &[
     "bulldogdays",
     "sneakersthecorgi",
 ];
-const IMAGE_FOLDER: &str = "instagram-scraper";
+const IMAGE_FOLDER: &str = "./cache/instagram-scraper";
 
 #[derive(Debug)]
 pub struct RespErr(Status);
@@ -66,7 +70,10 @@ impl From<std::io::Error> for RespErr {
 
 #[get("/dog")]
 fn dog(conn: DbConn) -> Resp<content::Html<String>> {
-    let path = db::dogs::get_random(&conn)?.path;
+    let path = match db::dogs::get_random(&conn) {
+        Ok(dog) => dog.path,
+        Err(_) => return Err(RespErr(Status::NotFound)),
+    };
     log::debug!("Pulling image from {}", path);
     let b64_image = image_as_b64(path)?;
 
@@ -89,8 +96,32 @@ fn image_as_b64(path: String) -> Resp<String> {
 fn update_image_paths(pool: &mut db::Pool) -> Result<()> {
     log::debug!("Adding new images & wiping old images..");
 
-    // TODO
-    // "instagram-scraper --destination ./cache/instagram --retain-username --media-metadata --media-types image --latest --login-user {} --login-pass {} --maximum 100 {page}"
+    let pages = INSTA_PAGES.join(",");
+    let output = Command::new("instagram-scraper")
+        .arg(pages)
+        .arg("--destination")
+        .arg(String::from(IMAGE_FOLDER))
+        .arg("--retain-username")
+        .arg("--media-metadata")
+        .arg("--media-types")
+        .arg("image")
+        .arg("--latest")
+        .arg("--login-user")
+        .arg(String::from(INSTA_USERNAME))
+        .arg("--login-pass")
+        .arg(String::from(INSTA_PASSWORD))
+        .arg("--maximum")
+        .arg("100")
+        .output()?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "instagram-scraper executed with failing error code {}",
+            output.status
+        )
+        .into());
+    }
+    // TODO check for "Login failed for" because it doesn't return non-zero
 
     let conn = db::DbConn(pool.get()?);
 
@@ -130,16 +161,23 @@ fn update_image_paths(pool: &mut db::Pool) -> Result<()> {
     Ok(())
 }
 
+embed_migrations!();
+
 fn main() {
-    dotenv::dotenv().expect("Failed to read .env file");
+    let _ = dotenv::dotenv();
     logger::setup_logging(log::LevelFilter::Debug).expect("failed to initialize logging");
 
     let mut pool = db::init_pool();
+
+    let conn = SqliteConnection::establish(&db::database_url()).unwrap();
+    embedded_migrations::run_with_output(&conn, &mut std::io::stdout()).unwrap();
+
     let f = move || {
         if let Err(e) = update_image_paths(&mut pool) {
             log::error!("{}", e);
         }
     };
+    thread::spawn(f.clone());
     let mut scheduler = Scheduler::new();
     scheduler.every(3.hours()).run(f);
 
@@ -167,7 +205,7 @@ pub mod db {
         Pool::new(manager).expect("Could not initialize db pool")
     }
 
-    fn database_url() -> String {
+    pub fn database_url() -> String {
         env::var("DATABASE_URL").expect("DATABASE_URL must be set")
     }
 
