@@ -6,7 +6,7 @@ edition = "2018"
 
 [[bin]]
 name = "bnuuy"
-path = "src/main.rs"
+path = "src/bin/bnuuy.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
