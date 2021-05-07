@@ -1,4 +1,11 @@
+# Rust specific
 target
 vendor
-*.sqlite
 .env
+
+# Application specific
+cache
+*.sqlite
+*.db
+.venv
+instagram-scraper.log

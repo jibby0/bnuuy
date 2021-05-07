@@ -11,26 +11,24 @@ extern crate diesel_migrations;
 pub mod schema;
 
 use crate::db::{dogs::Dog, DbConn};
-use base64;
+
 use clokwerk::{Scheduler, TimeUnits};
 use diesel::{Connection, SqliteConnection};
-use log;
+
 use rocket::{
     http::Status,
     request::Request,
     response::{content, Responder, Response},
 };
-use std::{fs, thread};
 use std::io::prelude::Read;
 use std::process::Command;
+use std::{fs, thread};
 use walkdir::WalkDir;
 
 use std::{error::Error, result::Result as StdResult};
 type Result<T> = StdResult<T, Box<dyn Error>>;
 
-const INSTA_USERNAME: &str = "MY-INSTA-USERNAME";
-const INSTA_PASSWORD: &str = "MY-INSTA-PASSWORD";
-static INSTA_PAGES: &'static [&str] = &[
+static INSTA_PAGES: &[&str] = &[
     "hlee2433",
     "_prince_irvin_",
     "bbaeggomi._",
@@ -114,14 +112,18 @@ fn update_image_paths(pool: &mut db::Pool) -> Result<()> {
         .arg("100")
         .output()?;
 
+    let stdout_utf8 = std::str::from_utf8(output.stdout.as_slice())?;
     if !output.status.success() {
         return Err(format!(
-            "instagram-scraper executed with failing error code {}",
-            output.status
+            "instagram-scraper executed with failing error code {}: {}",
+            output.status, stdout_utf8
         )
         .into());
     }
-    // TODO check for "Login failed for" because it doesn't return non-zero
+
+    if stdout_utf8.contains("Login failed for") {
+        return Err(format!("instagram-scraper failed login: {}", stdout_utf8).into());
+    }
 
     let conn = db::DbConn(pool.get()?);
 
