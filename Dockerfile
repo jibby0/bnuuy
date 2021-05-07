@@ -7,7 +7,7 @@ WORKDIR /bnuuy
 COPY ./Cargo.toml ./Cargo.toml
 # TODO optionally get rid of release
 RUN cargo build --release 
-RUN rm src/*.rs
+RUN rm -rf src/
 
 ADD . ./
 
