@@ -51,8 +51,9 @@ pub fn update_image_paths(pool: &mut db::Pool) -> Result<()> {
         if e.file_type().is_file() {
             let path = e.path().to_str().unwrap().to_string();
             if path.ends_with("jpg") || path.ends_with("jpeg") {
-                let created = fs::metadata(path.clone()).unwrap().created().unwrap();
-                images.push((path, created));
+                let metadata = fs::metadata(path.clone()).unwrap();
+                let timestamp = metadata.created().unwrap_or(metadata.modified().unwrap());
+                images.push((path, timestamp));
             }
         }
     }
