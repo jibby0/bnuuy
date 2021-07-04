@@ -17,7 +17,9 @@ RUN cargo build --release
 FROM python:3.9
 
 WORKDIR /bnuuy
-RUN pip install instagram-scraper==1.9.1
+RUN pip install beautifulsoup4==4.9.3
+ADD . ./
+RUN pip install ./instagram-scraper
 COPY --from=builder /bnuuy/target/release/bnuuy /bnuuy/bnuuy
 COPY ./Rocket.toml ./Rocket.toml
 

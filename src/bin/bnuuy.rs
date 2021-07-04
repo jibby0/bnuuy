@@ -1,5 +1,4 @@
-extern crate bnuuy;
-use bnuuy::{api, db, instagram, logger};
+use bnuuy::{api, bnuuy_config, db, image_sources::ImageSource, logger};
 #[macro_use]
 extern crate diesel_migrations;
 #[macro_use]
@@ -14,21 +13,26 @@ embed_migrations!();
 
 fn main() {
     let _ = dotenv::dotenv();
-    logger::setup_logging(log::LevelFilter::Debug).expect("failed to initialize logging");
+    logger::setup_logging(log::LevelFilter::Debug).unwrap();
 
-    let mut pool = db::init_pool();
+    let pool = db::init_pool();
 
     let conn = SqliteConnection::establish(&db::database_url()).unwrap();
     embedded_migrations::run_with_output(&conn, &mut std::io::stdout()).unwrap();
 
-    let f = move || {
-        if let Err(e) = instagram::update_image_paths(&mut pool) {
-            log::error!("{}", e);
-        }
-    };
-    thread::spawn(f.clone());
-    let mut scheduler = Scheduler::new();
-    scheduler.every(3.hours()).run(f);
+    let config = bnuuy_config::read_config().unwrap();
+    for source in config.sources {
+        let mut p = pool.clone();
+        let f = move || {
+            if let Err(e) = source.update_image_paths(&mut p) {
+                log::error!("{}", e);
+            }
+        };
+        thread::spawn(f.clone());
+        let mut scheduler = Scheduler::new();
+        // TODO allow cadence to be set?
+        scheduler.every(3.hours()).run(f);
+    }
 
     rocket::ignite()
         .manage(db::init_pool())

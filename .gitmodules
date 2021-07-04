@@ -1,0 +1,3 @@
+[submodule "instagram-scraper"]
+	path = instagram-scraper
+	url = git@github.com:arc298/instagram-scraper.git

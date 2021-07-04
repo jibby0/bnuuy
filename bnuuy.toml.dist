@@ -1,0 +1,15 @@
+[sources]
+    [sources.insta-dogs]
+    type = "instagram"
+    image_folder = "./cache/insta-dogs"
+    username = "MY_INSTA_USERNAME"
+    password = "MY_INSTA_PASSWORD"
+    instagram_pages = [
+      "hlee2433",
+      "_prince_irvin_",
+      "bbaeggomi._",
+      "angpang_smile",
+      "shila_the_pom",
+      "bulldogdays",
+      "sneakersthecorgi",
+    ]

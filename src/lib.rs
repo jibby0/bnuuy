@@ -1,31 +1,20 @@
 #![feature(proc_macro_hygiene, decl_macro)]
+#![feature(iter_zip)]
 
 #[macro_use]
 extern crate rocket;
 extern crate rocket_contrib;
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate enum_dispatch;
 
 pub mod api;
+pub mod bnuuy_config;
 pub mod db;
-pub mod instagram;
+pub mod image_sources;
 pub mod logger;
 pub mod schema;
 
 use std::{error::Error, result::Result as StdResult};
-type Result<T> = StdResult<T, Box<dyn Error>>;
-
-const INSTA_USERNAME: &str = "MY_INSTA_USERNAME";
-const INSTA_PASSWORD: &str = "MY_INSTA_PASSWORD";
-static INSTA_PAGES: &[&str] = &[
-    "hlee2433",
-    "_prince_irvin_",
-    "bbaeggomi._",
-    "bobo.ellie.buns",
-    "boubou_beliss_pomeranians",
-    "angpang_smile",
-    "shila_the_pom",
-    "bulldogdays",
-    "sneakersthecorgi",
-];
-const IMAGE_FOLDER: &str = "./cache/instagram-scraper";
+pub type Result<T> = StdResult<T, Box<dyn Error>>;

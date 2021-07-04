@@ -4,6 +4,7 @@ vendor
 .env
 
 # Application specific
+bnuuy.toml
 cache
 *.sqlite
 *.db
